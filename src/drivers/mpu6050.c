@@ -1,33 +1,27 @@
-#include "io.h"
-#include "registers.h"
+#include "mpu6050.h"
 #include "i2c.h"
-
-void mpu6050_init(void) {
-    i2c_start();
-    i2c_write(MPU6050_ADDR | 0); // Write
-    i2c_write(PWR_MGMT_1);
-    i2c_write(0x00); // Wake up
-    i2c_stop();
+#define MPU_ADDR 0x68u /* AD0 must be tied low. */
+static int read_word(uint8_t reg, int16_t *value)
+{
+    uint8_t hi, lo;
+    if (!i2c_read_reg(MPU_ADDR, reg, &hi) || !i2c_read_reg(MPU_ADDR, reg + 1u, &lo)) return 0;
+    *value = (int16_t)((uint16_t)((uint16_t)hi << 8) | lo);
+    return 1;
 }
-
-void mpu6050_read_accel(int16_t *ax, int16_t *ay, int16_t *az) {
-    i2c_start();
-    i2c_write(MPU6050_ADDR);   // write mode
-    i2c_write(ACCEL_XOUT_H);   // starting register
-
-    i2c_start();
-    i2c_write(MPU6050_ADDR | 1); // read mode
-
-    uint8_t axh = i2c_read_ack();
-    uint8_t axl = i2c_read_ack();
-    uint8_t ayh = i2c_read_ack();
-    uint8_t ayl = i2c_read_ack();
-    uint8_t azh = i2c_read_ack();
-    uint8_t azl = i2c_read_nack();
-
-    i2c_stop();
-
-    *ax = (axh << 8) | axl;
-    *ay = (ayh << 8) | ayl;
-    *az = (azh << 8) | azl;
+int mpu6050_init(void)
+{
+    uint8_t id;
+    if (!i2c_read_reg(MPU_ADDR, 0x75u, &id) || id != MPU_ADDR) return 0;
+    return i2c_write_reg(MPU_ADDR, 0x6bu, 0x01u) /* PLL with X gyro */
+        && i2c_write_reg(MPU_ADDR, 0x19u, 0x04u) /* 200 Hz */
+        && i2c_write_reg(MPU_ADDR, 0x1au, 0x03u) /* 44 Hz DLPF */
+        && i2c_write_reg(MPU_ADDR, 0x1bu, 0x00u) /* +/-250 dps */
+        && i2c_write_reg(MPU_ADDR, 0x1cu, 0x00u); /* +/-2 g */
+}
+int mpu6050_read(mpu6050_sample_t *sample)
+{
+    if (!sample) return 0;
+    return read_word(0x3bu, &sample->ax) && read_word(0x3du, &sample->ay)
+        && read_word(0x3fu, &sample->az) && read_word(0x43u, &sample->gx)
+        && read_word(0x45u, &sample->gy) && read_word(0x47u, &sample->gz);
 }

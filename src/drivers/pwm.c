@@ -1,64 +1,44 @@
 #include "pwm.h"
 #include "registers.h"
-
-void pwm_motorinit( uint8_t dutycyc_percent){
-    TIM2->CCR1 = dutycyc_percent; //duty cycle to 0
-    TIM2->PSC = 72-1; //timer clock in MHz 72MHz
-    TIM2->ARR = 1000 - 1 ;  //PWM Period 1Mhz
-    TIM2->CCMR1_Output.bit.OC1M = 6; // PWM Mode 1
-    TIM2->CCMR1_Output.bit.OC1PE = 1; // Output compare preload enable
-    TIM2->CCER.bit.CC1E= 1; // Capture/Compare 1 Output Enable
-    TIM2->CR1.bit.APRE=1; // auto preload enable
-    TIM2->EGR.bit.UG=1; //update generation
-    TIM2->CR1.bit.CEN=1; //counter enable
-
-    /*
-    PSC is timer clock in MHZ
-    ARR is PWM Period
-
-    fPWM = (fTIMER)/ (PSC +1 ) * (ARR+1)
-
-    for 20KHZ PWM and 72 MHz | ARR = 49
-
-    
-        CCR
-    0%	0
-    25%	12
-    50%	25
-    75%	37
-    100% 49
-    */
-
-
-    TIM2->PSC = 72-1;
-    TIM2->ARR = 49 ;
-
-    TIM2->CCMR1_Output.reg &= ~0xFF;
-    TIM2->CCMR1_Output.reg |= (6 << 4) | (1 << 3);
-    TIM2->CCER.reg |= (1<<0);
-    TIM2->CCR1 = 25;
-    TIM2->CR1.reg |= 1;
-
-
-    TIM1->PSC = 72-1;
-    TIM1->ARR = 49 ;
-
-    TIM1->CCMR2_Output &= ~0xFF;
-    TIM1->CCMR2_Output|= (6 << 4) | (1 << 3);
-    TIM1->CCER.reg |= (1<<8);
-    TIM1->CCR3 =25;
-    TIM1_BDTR |= (1 << 15);
-    TIM1->CR1.reg |= 1;
-
-    TIM3->PSC = 72-1;
-    TIM3->ARR = 49 ;
-
-    TIM3->CCMR1_Output.reg &= ~0xFF;
-    TIM3->CCMR1_Output.reg |= (6 << 4) | (1 << 3);
-
-    TIM3->CCMR1_Output.reg |= (6<<12) | (1<<11);
-    TIM3->CCER.reg |= (1<<0) | (1<<4);
-    TIM3->CCR1 = 25;
-    TIM3->CCR2 =25 ;
-    TIM3->CR1.reg |= 1;
+/* 72 MHz timer clock / 3600 counts = 20 kHz; 1 count = 0.278 permille. */
+#define PERIOD 3599u
+static void timer_init(TIM_T *t)
+{
+    t->CR1 = 0;
+    t->PSC = 0;
+    t->ARR = PERIOD;
+    t->EGR = 1;
+}
+void motor_stop_all(void)
+{
+    TIM2->CCR1 = 0; TIM1->CCR3 = 0; TIM3->CCR1 = 0; TIM3->CCR2 = 0;
+}
+void motor_init(void)
+{
+    RCC_APB1ENR |= RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM3EN;
+    RCC_APB2ENR |= RCC_APB2ENR_TIM1EN;
+    timer_init(TIM1); timer_init(TIM2); timer_init(TIM3);
+    TIM2->CCMR1 = (6u << 4) | (1u << 3);
+    TIM1->CCMR2 = (6u << 4) | (1u << 3);
+    TIM3->CCMR1 = (6u << 4) | (1u << 3) | (6u << 12) | (1u << 11);
+    motor_stop_all();
+    TIM1->CCER = 1u << 8;
+    TIM2->CCER = 1u;
+    TIM3->CCER = (1u << 0) | (1u << 4);
+    TIM1->BDTR = 1u << 15;
+    TIM1->CR1 = 1u << 7; TIM2->CR1 = 1u << 7; TIM3->CR1 = 1u << 7;
+    TIM1->EGR = 1; TIM2->EGR = 1; TIM3->EGR = 1;
+    TIM1->CR1 |= 1; TIM2->CR1 |= 1; TIM3->CR1 |= 1;
+}
+void motor_set(unsigned motor, uint16_t permille)
+{
+    if (permille > 1000u) permille = 1000u;
+    uint32_t duty = ((uint32_t)permille * (PERIOD + 1u)) / 1000u;
+    switch (motor) {
+    case 0: TIM2->CCR1 = duty; break;
+    case 1: TIM1->CCR3 = duty; break;
+    case 2: TIM3->CCR1 = duty; break;
+    case 3: TIM3->CCR2 = duty; break;
+    default: break;
+    }
 }

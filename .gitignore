@@ -1,2 +1,4 @@
 .vscode/
 todo
+.DS_Store
+tests/

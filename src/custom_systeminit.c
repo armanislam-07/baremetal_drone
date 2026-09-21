@@ -1,65 +1,15 @@
-#include <stdint.h>
-
-//RCC
-#define RCC_BASE ((RCC_T * ) 0x40021000) 
-#define FLASH_ACR (*(volatile uint32_t *)0x40022000)
-
-//RCC Struc | //check if this is the right format since typedef wouldnt maek sensebc its onyl one rcc
-typedef struct{
-    union{
-        uint32_t reg;
-        struct{
-            uint32_t before:16;
-            uint32_t HSEON:1;
-            uint32_t HSERDY:1; 
-            uint32_t after: 6;
-            uint32_t PLLON:1;
-            uint32_t PLLRDY:1;
-            uint32_t afterafter:6;
-        }bit;
-    } CR;
-    union{
-        uint32_t reg;
-        struct{
-            uint32_t SW:2;
-            uint32_t SWS:2;
-            uint32_t HPRE:4;
-            uint32_t PPRE1:3;
-            uint32_t PPRE2:3;
-            uint32_t ADC_PRE:2;
-            uint32_t PLLSRC:1;
-            uint32_t PLLXTPRE:1;
-            uint32_t PLLMUL:4;
-            uint32_t OTGFSPRE:1;
-            uint32_t res:1;
-            uint32_t MCO:3;
-            uint32_t reserved:3;
-        }bit;
-    } CFGR;
-    uint32_t CIR;
-    uint32_t APB2RSTR;
-    uint32_t APB1RSTR;
-    uint32_t AHBENR;
-    uint32_t APB2ENR;
-    uint32_t APB1ENR;
-    uint32_t BDCR;
-    uint32_t CSR;
-}RCC_T;
-
-// system_stm32f1xx.h
-void SystemInit(void){
-//turn on hse 
-RCC_BASE->CR.bit.HSEON = 1;
-
-//wait until HSERDY shows its enabled 
-while(!(RCC_BASE->CR.bit.HSERDY));
-FLASH_ACR |= 0x2;
-
-RCC_BASE->CFGR.bit.PLLSRC = 1;
-RCC_BASE->CFGR.bit.PLLMUL = 7 ; //?
-RCC_BASE->CR.bit.PLLON = 1; 
-
-while(!(RCC_BASE->CR.bit.PLLRDY));
-RCC_BASE->CFGR.bit.SW = 2;
-while(RCC_BASE->CFGR.bit.SWS != 0b10);
+#include "drivers/registers.h"
+/* Board schematic specifies a 16 MHz crystal. HSE/2 * 9 = 72 MHz. */
+void SystemInit(void)
+{
+    RCC_CR |= 1u << 16;
+    while (!(RCC_CR & (1u << 17))) { }
+    FLASH_ACR = (FLASH_ACR & ~7u) | 2u | (1u << 4);
+    /* APB1 = 36 MHz, APB2 = 72 MHz; PLL source HSE/2, multiplier 9. */
+    RCC_CFGR = (RCC_CFGR & ~((7u << 8) | (3u << 14) | (15u << 18) | (3u << 0)))
+             | (4u << 8) | (1u << 16) | (1u << 17) | (7u << 18);
+    RCC_CR |= 1u << 24;
+    while (!(RCC_CR & (1u << 25))) { }
+    RCC_CFGR = (RCC_CFGR & ~3u) | 2u;
+    while (((RCC_CFGR >> 2) & 3u) != 2u) { }
 }

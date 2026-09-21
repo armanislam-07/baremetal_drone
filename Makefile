@@ -1,94 +1,27 @@
-################################################################################
-# Automatically-generated file. Do not edit!
-# Toolchain: GNU Tools for STM32 (12.3.rel1)
-################################################################################
-
--include ../makefile.init
-
-RM := rm -rf
-
-# All of the sources participating in the build are defined here
--include sources.mk
--include Startup/subdir.mk
--include Src/subdir.mk
--include objects.mk
-
-ifneq ($(MAKECMDGOALS),clean)
-ifneq ($(strip $(S_DEPS)),)
--include $(S_DEPS)
-endif
-ifneq ($(strip $(S_UPPER_DEPS)),)
--include $(S_UPPER_DEPS)
-endif
-ifneq ($(strip $(C_DEPS)),)
--include $(C_DEPS)
-endif
-endif
-
--include ../makefile.defs
-
-OPTIONAL_TOOL_DEPS := \
-$(wildcard ../makefile.defs) \
-$(wildcard ../makefile.init) \
-$(wildcard ../makefile.targets) \
-
-
-BUILD_ARTIFACT_NAME := drone
-BUILD_ARTIFACT_EXTENSION := elf
-BUILD_ARTIFACT_PREFIX :=
-BUILD_ARTIFACT := $(BUILD_ARTIFACT_PREFIX)$(BUILD_ARTIFACT_NAME)$(if $(BUILD_ARTIFACT_EXTENSION),.$(BUILD_ARTIFACT_EXTENSION),)
-
-# Add inputs and outputs from these tool invocations to the build variables 
-EXECUTABLES += \
-drone.elf \
-
-MAP_FILES += \
-drone.map \
-
-SIZE_OUTPUT += \
-default.size.stdout \
-
-OBJDUMP_LIST += \
-drone.list \
-
-
-# All Target
-all: main-build
-
-# Main-build Target
-main-build: drone.elf secondary-outputs
-
-# Tool invocations
-drone.elf drone.map: $(OBJS) $(USER_OBJS) C:\Users\Arman\STM32CubeIDE\workspace_1.17.0\drone\STM32F103RBTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "drone.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"C:\Users\Arman\STM32CubeIDE\workspace_1.17.0\drone\STM32F103RBTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="drone.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
-	@echo 'Finished building target: $@'
-	@echo ' '
-
-default.size.stdout: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-size  $(EXECUTABLES)
-	@echo 'Finished building: $@'
-	@echo ' '
-
-drone.list: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-objdump -h -S $(EXECUTABLES) > "drone.list"
-	@echo 'Finished building: $@'
-	@echo ' '
-
-# Other Targets
+CC := arm-none-eabi-gcc
+OBJCOPY := arm-none-eabi-objcopy
+SIZE := arm-none-eabi-size
+CFLAGS := -std=c11 -mcpu=cortex-m3 -mthumb -mfloat-abi=soft -Os -ffunction-sections -fdata-sections -Wall -Wextra -Werror
+AUTOSTART ?= 0
+CFLAGS += -DDRONE_AUTOSTART=$(AUTOSTART)
+LDFLAGS := -mcpu=cortex-m3 -mthumb -mfloat-abi=soft -T STM32F103RBTX_FLASH.ld -Wl,--gc-sections -Wl,-Map=build/drone.map --specs=nano.specs --specs=nosys.specs
+SOURCES := $(wildcard src/*.c src/drivers/*.c src/app/*.c)
+OBJECTS := $(patsubst %.c,build/%.o,$(SOURCES)) build/startup/startup_stm32f103rbtx.o
+all: build/drone.elf build/drone.bin
+build/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+build/startup/%.o: startup/%.s
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+build/drone.elf: $(OBJECTS) STM32F103RBTX_FLASH.ld
+	$(CC) $(OBJECTS) $(LDFLAGS) -lm -lc -o $@
+	$(SIZE) $@
+build/drone.bin: build/drone.elf
+	$(OBJCOPY) -O binary $< $@
 clean:
-	-$(RM) default.size.stdout drone.elf drone.list drone.map
-	-@echo ' '
-
-secondary-outputs: $(SIZE_OUTPUT) $(OBJDUMP_LIST)
-
-fail-specified-linker-script-missing:
-	@echo 'Error: Cannot find the specified linker script. Check the linker settings in the build configuration.'
-	@exit 2
-
-warn-no-linker-script-specified:
-	@echo 'Warning: No linker script specified. Check the linker settings in the build configuration.'
-
-.PHONY: all clean dependents main-build fail-specified-linker-script-missing warn-no-linker-script-specified
-
--include ../makefile.targets
-
+	rm -rf build
+test:
+	clang -std=c11 -Wall -Wextra -Werror tests/flight_test.c src/app/autolevel.c -lm -o /tmp/drone-flight-test
+	/tmp/drone-flight-test
+.PHONY: all clean test
